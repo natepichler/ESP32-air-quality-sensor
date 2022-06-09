@@ -240,15 +240,15 @@ display:
 
     lambda: |-
       it.print(0, 0, id(arial), "0.5um:");
-      it.printf(128, 0, id(arial), TextAlign::TOP_RIGHT,"%4.0f", id(workshop_PMC_0_5).state*100);
+      it.printf(128, 0, id(arial), TextAlign::TOP_RIGHT,"%4.1f", id(workshop_PMC_0_5).state);
       it.rectangle(29, 8, 2, 14);
       
       it.print(0, 25, id(arial), "10um:");
-      it.printf(128, 25, id(arial), TextAlign::TOP_RIGHT,"%4.0f", id(workshop_PMC_10_0).state*100);
+      it.printf(128, 25, id(arial), TextAlign::TOP_RIGHT,"%4.1f", id(workshop_PMC_10_0).state);
       it.rectangle(23, 33, 2, 14);
       
       it.print(0, 50, id(arial), "0.5-10:");
-      it.printf(128, 50, id(arial), TextAlign::TOP_RIGHT,"%4.0f", (id(workshop_PMC_10_0).state - id(workshop_PMC_0_5).state)*100);
+      it.printf(128, 50, id(arial), TextAlign::TOP_RIGHT,"%4.1f", (id(workshop_PMC_10_0).state - id(workshop_PMC_0_5).state));
       
       it.print(0, 83, id(arial), "Temp:");
       it.printf(128, 83, id(arial), TextAlign::TOP_RIGHT, "°F");
