@@ -1,0 +1,263 @@
+esphome:
+  name: "workshop-sensor"
+  on_boot:
+    priority: 800
+    then:
+      - delay: 0.2s
+      - light.turn_on: air_qual_green
+      - delay: 0.2s
+      - light.turn_off: air_qual_green
+      - light.turn_on: air_qual_yellow
+      - delay: 0.2s
+      - light.turn_off: air_qual_yellow
+      - light.turn_on: air_qual_red
+      - delay: 0.2s
+      - light.turn_off: air_qual_red
+      - light.turn_on: air_qual_yellow
+      - delay: 0.2s
+      - light.turn_off: air_qual_yellow
+      - light.turn_on: air_qual_green
+      - delay: 0.4s
+      - light.turn_off: air_qual_green
+      
+esp32:
+  board: esp32-s2-saola-1
+  framework:
+    type: esp-idf
+
+# Enable logging
+logger:
+
+# Enable Home Assistant API
+api:
+  encryption:
+    key: ""
+
+ota:
+  password: ""
+
+wifi:
+  ssid: !secret wifi_ssid
+  password: !secret wifi_password
+
+  # Enable fallback hotspot in case wifi connection fails
+  ap:
+    ssid: "workshop-sensor Fallback Hotspot"
+    password: ""
+    
+i2c:
+  - id: air_quality
+    sda: 2
+    scl: 3
+    scan: false
+    frequency: 100kHz
+    
+  - id: ssd1327
+    sda: 9
+    scl: 8
+    frequency: 200kHz
+    
+font:
+  - file: "fonts/arial.ttf"
+    id: arial
+    size: 20
+    
+light:
+  - platform: binary
+    name: "Air Status Green"
+    id: air_qual_green
+    output: air_status_green
+
+  - platform: binary
+    name: "Air Status Yellow"
+    id: air_qual_yellow
+    output: air_status_yellow
+    
+  - platform: binary
+    name: "Air Status Red"
+    id: air_qual_red
+    output: air_status_red
+    
+output:
+  - id: air_status_green
+    platform: gpio
+    pin: GPIO14
+    
+  - id: air_status_yellow
+    platform: gpio
+    pin: GPIO15
+    
+  - id: air_status_red
+    platform: gpio
+    pin: GPIO16
+    
+switch:
+  - platform: restart
+    id: workshop_restart
+    
+binary_sensor:
+  - platform: gpio
+    pin: 
+      number: 19
+      mode:
+        input: true
+        pulldown: true
+    id: toggle_switch
+    on_state:
+      - if:
+          condition:
+            binary_sensor.is_on: toggle_switch
+          then:
+            - delay: 0.2s
+            - switch.turn_on: workshop_restart
+          else:
+            - delay: 0.2s
+            - lambda: id(ssd1327_display).turn_off();
+            - light.turn_off: air_qual_green
+            - light.turn_off: air_qual_yellow
+            - light.turn_off: air_qual_red
+            - delay: 0.2s
+    
+sensor:
+  - platform: dht
+    model: dht22
+    pin: 12
+    update_interval: 5s
+    temperature:
+      name: Workshop Temperature
+      id: temp
+    humidity:
+      name: Workshop Humidity
+      id: hum
+  
+  - platform: sps30
+    i2c_id: air_quality
+    address: 0x69
+    update_interval: 10s  
+    pm_1_0:
+      name: "Workshop PM <1µm Weight concentration"
+      id: workshop_PM_1_0
+    pm_2_5:
+      name: "Workshop PM <2.5µm Weight concentration"
+      id: workshop_PM_2_5
+    pm_4_0:
+      name: "Workshop PM <4µm Weight concentration"
+      id: workshop_PM_4_0
+    pm_10_0:
+      name: "Workshop PM <10µm Weight concentration"
+      id: workshop_PM_10_0
+    pmc_0_5:
+      name: "Workshop PM <0.5µm Number concentration"
+      id: workshop_PMC_0_5
+    pmc_1_0:
+      name: "Workshop PM <1µm Number concentration"
+      id: workshop_PMC_1_0
+    pmc_2_5:
+      name: "Workshop PM <2.5µm Number concentration"
+      id: workshop_PMC_2_5
+    pmc_4_0:
+      name: "Workshop PM <4µm Number concentration"
+      id: workshop_PMC_4_0
+    pmc_10_0:
+      name: "Workshop PM <10µm Number concentration"
+      id: workshop_PMC_10_0
+    pm_size:
+      name: "Typical Particle size"
+      id: pm_size
+      
+  - platform: template
+    name: "PM Size x 1000"
+    id: pm_size_1000
+    lambda: |-
+      return id(pm_size).state * 1000;
+    update_interval: 10s
+    
+  - platform: template
+    name: "Workshop PMC 10"
+    id: workshop_PMC_10_init
+    lambda: |-
+      return id(workshop_PMC_10_0).state;
+    update_interval: 5s
+    on_value_range:
+      - below: 50
+        then:
+          - if: 
+              condition:
+                binary_sensor.is_on: toggle_switch
+              then:
+                - light.turn_on: air_qual_green
+                - light.turn_off: air_qual_yellow
+                - light.turn_off: air_qual_red
+                - lambda: |-
+                    id(air_qual_state).publish_state("green");
+              else:
+                - lambda: |-
+                    id(air_qual_state).publish_state("green");
+      - above: 51
+        below: 125
+        then:
+          - if:
+              condition:
+                binary_sensor.is_on: toggle_switch
+              then:
+                - light.turn_off: air_qual_green
+                - light.turn_on: air_qual_yellow
+                - light.turn_off: air_qual_red
+                - lambda: |-
+                    id(air_qual_state).publish_state("yellow");
+              else:
+                - lambda: |-
+                    id(air_qual_state).publish_state("yellow");
+
+      - above: 126
+        then:
+          - if:
+              condition:
+                binary_sensor.is_on: toggle_switch
+              then:
+                - light.turn_off: air_qual_green
+                - light.turn_off: air_qual_yellow
+                - light.turn_on: air_qual_red
+                - lambda: |-
+                    id(air_qual_state).publish_state("red");
+              else:
+                - lambda: |-
+                    id(air_qual_state).publish_state("red");
+              
+text_sensor:              
+  - platform: template
+    name: "Air Quality State"
+    id: air_qual_state
+    update_interval: 10s
+    
+display:
+  - platform: ssd1327_i2c
+    i2c_id: ssd1327
+    id: ssd1327_display
+    model: "SSD1327 128x128"
+    update_interval: 5s
+    address: 0x3D
+
+    lambda: |-
+      it.print(0, 0, id(arial), "0.5um:");
+      it.printf(128, 0, id(arial), TextAlign::TOP_RIGHT,"%4.0f", id(workshop_PMC_0_5).state*100);
+      it.rectangle(29, 8, 2, 14);
+      
+      it.print(0, 25, id(arial), "10um:");
+      it.printf(128, 25, id(arial), TextAlign::TOP_RIGHT,"%4.0f", id(workshop_PMC_10_0).state*100);
+      it.rectangle(23, 33, 2, 14);
+      
+      it.print(0, 50, id(arial), "0.5-10:");
+      it.printf(128, 50, id(arial), TextAlign::TOP_RIGHT,"%4.0f", (id(workshop_PMC_10_0).state - id(workshop_PMC_0_5).state)*100);
+      
+      it.print(0, 83, id(arial), "Temp:");
+      it.printf(128, 83, id(arial), TextAlign::TOP_RIGHT, "°F");
+      it.printf(105, 83, id(arial), TextAlign::TOP_RIGHT, "%3.1f", id(temp).state * (9.0/5.0) + 32.0);
+      
+      it.print(0, 108, id(arial), "RH:");
+      it.printf(128, 108, id(arial), TextAlign::TOP_RIGHT, "%%");
+      it.printf(110, 108, id(arial), TextAlign::TOP_RIGHT, "%3.1f", id(hum).state);
+      
+      it.rectangle(0, 76, 128, 2);
+
+
